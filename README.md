@@ -1,6 +1,6 @@
 # testclaw
 
-`testclaw` 是 `TestClaw / SonicCloudMono` 面向 AI Agent、工程师与 CI 的一方 Node CLI。
+`testclaw` 是 TestClaw 面向 AI Agent、工程师与 CI 的一方 Node CLI。
 
 目标是把 AI 模块主架构收敛为：
 
@@ -9,7 +9,7 @@
 - `CLI`
   - `testclaw` 负责确定性执行、参数标准化、本地 `adb` 与远端 API 混合编排
 - `SKILL`
-  - `using-sonic` 等 skill 负责自然语言触发与工作流编排
+  - `testclaw-skills` 负责自然语言触发与工作流编排
 
 `testclaw-mcp` 继续保留，但定位改为兼容层，用于：
 
@@ -35,17 +35,39 @@ testclaw-cli/
 
 ## 安装
 
-本地仓库安装：
+外部用户推荐直接从 GitHub 安装：
 
 ```bash
-cd /Volumes/Disk_APFS/Work/XiaMao/Project/TestClaw/testclaw-cli
-npm install -g .
+npm install -g git+https://github.com/liam798/testclaw-cli.git
 ```
 
-如果后续发布到 npm registry，则可直接：
+也可以使用 npm 的 GitHub shorthand：
 
 ```bash
-npm install -g testclaw
+npm install -g github:liam798/testclaw-cli
+```
+
+安装后验证：
+
+```bash
+testclaw --help
+testclaw --json doctor
+```
+
+配置 TestClaw Server 并登录：
+
+```bash
+testclaw config set base_url https://testclaw.vvicat.dev
+testclaw login
+testclaw --json whoami
+```
+
+开发者本地仓库安装：
+
+```bash
+git clone git@github.com:liam798/testclaw-cli.git
+cd testclaw-cli
+npm install -g .
 ```
 
 ## 入口
@@ -65,7 +87,7 @@ testclaw --json doctor
 推荐先把服务地址写进默认配置文件：
 
 ```bash
-testclaw config set base_url http://127.0.0.1:3001
+testclaw config set base_url https://testclaw.vvicat.dev
 ```
 
 默认配置文件路径：
@@ -83,7 +105,7 @@ testclaw config set base_url http://127.0.0.1:3001
 `config` 使用 key/value 保存，支持以下配置项：
 
 ```bash
-testclaw config set base_url http://127.0.0.1:3001
+testclaw config set base_url https://testclaw.vvicat.dev
 testclaw config set adb_bin /opt/homebrew/bin/adb
 testclaw config get base_url
 testclaw config list
@@ -94,7 +116,7 @@ testclaw config unset adb_bin
 
 ```json
 {
-  "base_url": "http://127.0.0.1:3001",
+  "base_url": "https://testclaw.vvicat.dev",
   "adb_bin": "adb"
 }
 ```
@@ -120,15 +142,14 @@ testclaw logout
 默认会自动推导 OAuth 地址为：
 
 ```text
-http://127.0.0.1:3001/api/oauth
+https://testclaw.vvicat.dev/api/oauth
 ```
 
 ## 常用示例
 
 ```bash
-testclaw config set base_url http://127.0.0.1:3001
+testclaw config set base_url https://testclaw.vvicat.dev
 testclaw --json doctor
-testclaw login --username admin --password secret
 testclaw login
 testclaw --json whoami
 testclaw --json module create --project-id 9 --name 登录模块
@@ -274,6 +295,8 @@ testclaw --json raw request --method GET --path /projects/list
 ## 测试
 
 ```bash
-cd /Volumes/Disk_APFS/Work/XiaMao/Project/TestClaw/testclaw-cli
+git clone git@github.com:liam798/testclaw-cli.git
+cd testclaw-cli
+npm install
 npm test
 ```
