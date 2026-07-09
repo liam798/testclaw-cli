@@ -121,17 +121,17 @@ async function runCoreChecks() {
         resolvedDevice: { id: deviceId || 1, udId: udid || "device-1" },
       };
     }
-  }
-  class FakeAdb {
+
     killApp(adbAddress, appId) {
       return { killed: true, adbAddress, appId };
     }
-    openApp(adbAddress, appId) {
-      return { opened: true, adbAddress, appId };
+
+    openApp({ deviceId, udid, appId }) {
+      return { opened: true, deviceId, udid, appId };
     }
   }
   const session = new CommandSession();
-  const app = { backend: new FakeBackend(), adb: new FakeAdb() };
+  const app = { backend: new FakeBackend() };
   session.rememberPrepare(
     { deviceId: 1, udId: "device-1" },
     { adbAddress: "127.0.0.1:56001", resolvedDevice: { id: 1, udId: "device-1" } },
@@ -253,6 +253,7 @@ async function runE2EChecks() {
   let agentReports = [];
   let securityTasks = [];
   let securityReports = new Map();
+  let agentCommandCalls = [];
   let securityTaskId = 600;
   let moduleId = 100;
   let caseId = 200;
@@ -282,14 +283,14 @@ async function runE2EChecks() {
         return;
       }
       if (req.method === "GET" && requestUrl.pathname === "/api/controller/devices") {
-        jsonResponse(res, { code: 2000, message: "ok", data: { id: 1, udId: "device-1", platform: 1, status: "ONLINE", name: "Pixel 4" } });
+        jsonResponse(res, { code: 2000, message: "ok", data: { id: 1, udId: "device-1", platform: 1, status: "ONLINE", name: "Pixel 4", agentId: 7 } });
         return;
       }
       if (req.method === "GET" && requestUrl.pathname === "/api/controller/devices/list") {
         jsonResponse(res, {
           code: 2000,
           message: "ok",
-          data: { records: [{ id: 1, udId: "device-1", platform: 1, status: "ONLINE", name: "Pixel 4" }] },
+          data: { records: [{ id: 1, udId: "device-1", platform: 1, status: "ONLINE", name: "Pixel 4", agentId: 7 }] },
         });
         return;
       }
@@ -303,6 +304,29 @@ async function runE2EChecks() {
       }
       if (req.method === "GET" && requestUrl.pathname === "/api/controller/devices/release") {
         jsonResponse(res, { code: 2000, message: "released", data: true });
+        return;
+      }
+      if (req.method === "POST" && requestUrl.pathname === "/api/controller/agents/7/command") {
+        const payload = JSON.parse((await readBody()) || "{}");
+        agentCommandCalls.push(payload);
+        assert.equal(payload.cmd, "adb");
+        if (payload.args.join(" ") === "-s device-1 shell pm list packages") {
+          jsonResponse(res, { code: 2000, message: "success", data: { status: "success", stdout: "package:com.demo.app\n" } });
+          return;
+        }
+        if (payload.args.join(" ") === "-s device-1 shell monkey -p com.demo.app -c android.intent.category.LAUNCHER 1") {
+          jsonResponse(res, { code: 2000, message: "success", data: { status: "success", stdout: "Events injected: 1" } });
+          return;
+        }
+        if (payload.args.join(" ") === "-s device-1 shell am force-stop com.demo.app") {
+          jsonResponse(res, { code: 2000, message: "success", data: { status: "success", stdout: "" } });
+          return;
+        }
+        if (payload.args.join(" ") === "-s device-1 uninstall com.demo.app") {
+          jsonResponse(res, { code: 2000, message: "success", data: { status: "success", stdout: "Success" } });
+          return;
+        }
+        jsonResponse(res, { code: 2000, message: "success", data: { status: "error", error: `unexpected args: ${payload.args.join(" ")}` } });
         return;
       }
       if (req.method === "POST" && requestUrl.pathname === "/api/oauth/authorize") {
@@ -734,6 +758,19 @@ async function runE2EChecks() {
     });
     assert.equal(result.code, 0, result.stderr);
     assert.equal(JSON.parse(result.stdout).adbAddress, "127.0.0.1:56001");
+
+    result = await runCli(["--json", "app", "list-installed", "--device-id", "1"], {
+      env: { SONIC_CLI_CONFIG: configPath },
+    });
+    assert.equal(result.code, 0, result.stderr);
+    assert.deepEqual(JSON.parse(result.stdout).packages, ["com.demo.app"]);
+
+    result = await runCli(["--json", "app", "open", "--device-id", "1", "--app-id", "com.demo.app"], {
+      env: { SONIC_CLI_CONFIG: configPath },
+    });
+    assert.equal(result.code, 0, result.stderr);
+    assert.equal(JSON.parse(result.stdout).executionMode, "server_agent");
+    assert.ok(agentCommandCalls.some((call) => call.args.join(" ") === "-s device-1 shell monkey -p com.demo.app -c android.intent.category.LAUNCHER 1"));
 
     result = await runCli(["--json", "module", "create", "--project-id", "9", "--name", "登录模块"], {
       env: { SONIC_CLI_CONFIG: configPath },
