@@ -92,6 +92,26 @@ testclaw init
 testclaw init --source-dir ./testclaw-skills
 ```
 
+检查 CLI 是否有可安装更新：
+
+```bash
+testclaw update --check
+```
+
+更新 CLI：
+
+```bash
+testclaw update
+```
+
+`testclaw update` 会执行：
+
+```bash
+npm install -g git+https://github.com/liam798/testclaw-cli.git
+```
+
+更新完成后，重新执行 `testclaw` 命令即可使用新版本。
+
 开发者本地仓库安装：
 
 ```bash
@@ -180,6 +200,7 @@ https://testclaw.vvicat.dev/api/oauth
 ```bash
   testclaw config set base_url https://testclaw.vvicat.dev
   testclaw init
+  testclaw update --check
   testclaw --json doctor
   testclaw login
   testclaw --json whoami

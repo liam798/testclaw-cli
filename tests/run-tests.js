@@ -100,6 +100,16 @@ async function runCoreChecks() {
   fs.rmSync(initRoot, { recursive: true, force: true });
   logPass("init installs testclaw-cli skill into detected and fallback directories");
 
+  const updateCheck = await runCli(["--json", "update", "--check", "--spec", "file:."], {
+    env: { ...process.env },
+  });
+  assert.equal(updateCheck.code, 0, updateCheck.stderr);
+  const updatePayload = JSON.parse(updateCheck.stdout);
+  assert.equal(updatePayload.ok, true);
+  assert.equal(updatePayload.package, "testclaw");
+  assert.equal(updatePayload.currentVersion, updatePayload.latestVersion);
+  logPass("update --check reports installable version");
+
   class FakeBackend {
     async releaseDevice({ udid }) {
       return { released: true, udId: udid };
