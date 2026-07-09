@@ -1,0 +1,15 @@
+{
+  "name": "testclaw",
+  "version": "0.2.0",
+  "description": "TestClaw - Automation testing with AI orchestration",
+  "license": "Apache-2.0",
+  "bin": {
+    "testclaw": "./bin/testclaw.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "test": "node tests/run-tests.js"
+  }
+}
