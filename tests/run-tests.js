@@ -80,6 +80,26 @@ async function runCoreChecks() {
   fs.rmSync(tempRoot, { recursive: true, force: true });
   logPass("buildConfig and configView behave as expected");
 
+  const initRoot = fs.mkdtempSync(path.join(os.tmpdir(), "testclaw-init-"));
+  const skillSource = path.join(initRoot, "testclaw-skills");
+  fs.mkdirSync(path.join(skillSource, "testclaw-cli", "references"), { recursive: true });
+  fs.writeFileSync(path.join(skillSource, "testclaw-cli", "SKILL.md"), "# TestClaw CLI Skill\n", "utf8");
+  fs.writeFileSync(path.join(skillSource, "testclaw-cli", "references", "tools.md"), "tools\n", "utf8");
+  fs.mkdirSync(path.join(initRoot, ".codex"), { recursive: true });
+  fs.mkdirSync(path.join(initRoot, ".claude"), { recursive: true });
+  const initResult = await runCli(["--json", "init", "--source-dir", skillSource], {
+    env: { HOME: initRoot, USERPROFILE: initRoot },
+  });
+  assert.equal(initResult.code, 0, initResult.stderr);
+  const initPayload = JSON.parse(initResult.stdout);
+  assert.equal(initPayload.ok, true);
+  assert.equal(initPayload.skill, "testclaw-cli");
+  assert.ok(fs.existsSync(path.join(initRoot, ".codex", "skills", "testclaw-cli", "SKILL.md")));
+  assert.ok(fs.existsSync(path.join(initRoot, ".claude", "skills", "testclaw-cli", "SKILL.md")));
+  assert.ok(fs.existsSync(path.join(initRoot, ".agents", "skills", "testclaw-cli", "SKILL.md")));
+  fs.rmSync(initRoot, { recursive: true, force: true });
+  logPass("init installs testclaw-cli skill into detected and fallback directories");
+
   class FakeBackend {
     async releaseDevice({ udid }) {
       return { released: true, udId: udid };

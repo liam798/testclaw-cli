@@ -62,6 +62,36 @@ testclaw login
 testclaw --json whoami
 ```
 
+初始化 AI Agent skills：
+
+```bash
+testclaw init
+```
+
+`testclaw init` 会下载 `testclaw-skills`，并把 `testclaw-cli` skill 安装到本机已检测到的 AI Agent 全局 skills 目录，例如：
+
+- `~/.codex/skills/testclaw-cli`
+- `~/.cursor/skills/testclaw-cli`
+- `~/.claude/skills/testclaw-cli`
+- `~/.trae/skills/testclaw-cli`
+- `~/.gemini/skills/testclaw-cli`
+- `~/.kiro/skills/testclaw-cli`
+- `~/.openclaw/skills/testclaw-cli`
+- `~/.config/opencode/skills/testclaw-cli`
+- `~/.codeium/windsurf/skills/testclaw-cli`
+
+同时会安装到默认兜底目录：
+
+```text
+~/.agents/skills/testclaw-cli
+```
+
+离线或开发场景可以指定本地 skills 仓库：
+
+```bash
+testclaw init --source-dir ./testclaw-skills
+```
+
 开发者本地仓库安装：
 
 ```bash
@@ -148,10 +178,11 @@ https://testclaw.vvicat.dev/api/oauth
 ## 常用示例
 
 ```bash
-testclaw config set base_url https://testclaw.vvicat.dev
-testclaw --json doctor
-testclaw login
-testclaw --json whoami
+  testclaw config set base_url https://testclaw.vvicat.dev
+  testclaw init
+  testclaw --json doctor
+  testclaw login
+  testclaw --json whoami
 testclaw --json module create --project-id 9 --name 登录模块
 testclaw --json case create --project-id 9 --platform 1 --name 登录成功用例 --module-id 101 --version v1.0.0 --des 验证登录成功流程
 testclaw --json step create --project-id 9 --platform 1 --case-id 201 --step-type click --element-id 301
