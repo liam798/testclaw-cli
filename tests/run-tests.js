@@ -1458,6 +1458,12 @@ async function runSecurityAnalysisChecks() {
     assert.equal(noArgs.code, 0, noArgs.stderr);
     assert.equal(noArgs.stdout, help.stdout);
     assert.doesNotMatch(noArgs.stdout, /testclaw> /);
+    const version = await runCli(["--version"]);
+    assert.equal(version.code, 0, version.stderr);
+    assert.match(version.stdout, /^testclaw \d+\.\d+\.\d+/);
+    const jsonVersion = await runCli(["--json", "version"]);
+    assert.equal(jsonVersion.code, 0, jsonVersion.stderr);
+    assert.equal(JSON.parse(jsonVersion.stdout).name, "testclaw");
     const removedGlobal = await runCli(["--base-url", "http://127.0.0.1:3001", "whoami"]);
     assert.notEqual(removedGlobal.code, 0);
     assert.match(removedGlobal.stderr, /未知全局选项/);
