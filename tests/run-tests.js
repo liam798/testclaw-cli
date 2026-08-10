@@ -387,6 +387,22 @@ async function runE2EChecks() {
         });
         return;
       }
+      if (req.method === "POST" && requestUrl.pathname === "/api/oauth/memhub/cli-session") {
+        assert.equal(req.headers["x-api-key"], "memhub-api-key-1");
+        jsonResponse(res, {
+          code: 2000,
+          message: "success",
+          data: {
+            sonicToken: "token-123",
+            userId: 37,
+            userName: "liam",
+            email: "liam@vvicat.com",
+            name: "liam",
+            authProvider: "memhub",
+          },
+        });
+        return;
+      }
       if (req.method === "GET" && requestUrl.pathname === "/api/controller/modules/list") {
         jsonResponse(res, { code: 2000, message: "success", data: modules });
         return;
@@ -761,6 +777,25 @@ async function runE2EChecks() {
     assert.equal(doctorBeforeLogin.config.base_url, baseUrl);
     assert.equal(doctorBeforeLogin.auth.has_token, false);
     assert.equal(doctorBeforeLogin.checks.find((check) => check.name === "endpoint.controller").ok, true);
+
+    fs.mkdirSync(path.dirname(memhubCredentialsPath), { recursive: true });
+    fs.writeFileSync(memhubCredentialsPath, JSON.stringify({
+      base_url: "https://memhub.vvicat.dev",
+      auth_mode: "api_key",
+      api_key: "memhub-api-key-1",
+      user: { username: "liam", email: "liam@vvicat.com" },
+    }), "utf8");
+    result = await runCli(["--json", "whoami"], {
+      env: { SONIC_CLI_CONFIG: configPath },
+    });
+    assert.equal(result.code, 0, result.stderr);
+    assert.equal(JSON.parse(result.stdout).user.username, "liam");
+    assert.equal(JSON.parse(result.stdout).token_source, "memhub_shared");
+    const exchangedMemHub = JSON.parse(fs.readFileSync(memhubCredentialsPath, "utf8"));
+    assert.equal(exchangedMemHub.clients.testclaw.sonic_token, "token-123");
+    delete exchangedMemHub.clients;
+    fs.writeFileSync(memhubCredentialsPath, JSON.stringify(exchangedMemHub), "utf8");
+    logPass("whoami exchanges shared MemHub API key for TestClaw session");
 
     result = await runCli(["--json", "--api", baseUrl, "doctor"], {
       env: { SONIC_CLI_CONFIG: path.join(tempRoot, "api-override-config.json") },
