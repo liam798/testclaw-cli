@@ -80,6 +80,33 @@ async function runCoreChecks() {
   fs.rmSync(tempRoot, { recursive: true, force: true });
   logPass("buildConfig and configView behave as expected");
 
+  const memhubRoot = fs.mkdtempSync(path.join(os.tmpdir(), "testclaw-memhub-auth-"));
+  const memhubCredentialsPath = path.join(memhubRoot, "credentials.json");
+  fs.writeFileSync(memhubCredentialsPath, JSON.stringify({
+    base_url: "https://memhub.vvicat.dev",
+    auth_mode: "api_key",
+    access_token: "memhub-token",
+    clients: {
+      testclaw: {
+        base_url: "http://127.0.0.1:3001",
+        auth_mode: "memhub_oidc",
+        sonic_token: "shared-testclaw-token",
+        oauth_client_id: "testclaw-cli",
+        user: { username: "liam" },
+      },
+    },
+  }), "utf8");
+  const sharedConfig = buildConfig({
+    baseUrl: "http://127.0.0.1:3001",
+    configPath: path.join(memhubRoot, "config.json"),
+    memhubCredentialsPath,
+  }).config;
+  assert.equal(sharedConfig.token, "shared-testclaw-token");
+  assert.equal(sharedConfig.authMode, "memhub_oidc");
+  assert.equal(sharedConfig.tokenSource, "memhub_shared");
+  fs.rmSync(memhubRoot, { recursive: true, force: true });
+  logPass("buildConfig reuses shared MemHub TestClaw session");
+
   const initRoot = fs.mkdtempSync(path.join(os.tmpdir(), "testclaw-init-"));
   const skillSource = path.join(initRoot, "testclaw-skills");
   fs.mkdirSync(path.join(skillSource, "testclaw-cli", "references"), { recursive: true });
@@ -670,6 +697,9 @@ async function runE2EChecks() {
   const baseUrl = `http://127.0.0.1:${address.port}`;
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "testclaw-e2e-"));
   const configPath = path.join(tempRoot, "config.json");
+  const memhubCredentialsPath = path.join(tempRoot, "memhub", "credentials.json");
+  const originalMemHubCredentials = process.env.TESTCLAW_MEMHUB_CREDENTIALS;
+  process.env.TESTCLAW_MEMHUB_CREDENTIALS = memhubCredentialsPath;
   const adbPath = createFakeAdb(tempRoot);
   const browserPath = createFakeBrowser(tempRoot);
   const apkPath = path.join(tempRoot, "demo.apk");
@@ -732,12 +762,25 @@ async function runE2EChecks() {
     assert.equal(doctorBeforeLogin.auth.has_token, false);
     assert.equal(doctorBeforeLogin.checks.find((check) => check.name === "endpoint.controller").ok, true);
 
+    result = await runCli(["--json", "--api", baseUrl, "doctor"], {
+      env: { SONIC_CLI_CONFIG: path.join(tempRoot, "api-override-config.json") },
+    });
+    assert.equal(result.code, 0, result.stderr);
+    assert.equal(JSON.parse(result.stdout).config.base_url, baseUrl);
+
     const loginStartedAt = Date.now();
     result = await runCli(["login", "--browser-command", browserPath, "--timeout-seconds", "5"], {
       env: { SONIC_CLI_CONFIG: configPath },
     });
     assert.equal(result.code, 0, result.stderr);
     assert.ok(Date.now() - loginStartedAt < 4000, "login should exit after successful callback without waiting for timeout");
+    const loginPayload = JSON.parse(result.stdout);
+    assert.equal(loginPayload.ok, true);
+    assert.equal(loginPayload.auth_mode, "memhub_oidc");
+    assert.equal(loginPayload.user.username, "liam");
+    assert.doesNotMatch(result.stdout, /token-123|oauth-access-1|oauth-refresh-1/);
+    const sharedMemHub = JSON.parse(fs.readFileSync(memhubCredentialsPath, "utf8"));
+    assert.equal(sharedMemHub.clients.testclaw.sonic_token, "token-123");
 
     result = await runCli(["--json", "doctor"], {
       env: { SONIC_CLI_CONFIG: configPath },
@@ -751,7 +794,8 @@ async function runE2EChecks() {
       env: { SONIC_CLI_CONFIG: configPath },
     });
     assert.equal(result.code, 0, result.stderr);
-    assert.equal(JSON.parse(result.stdout).data.userName, "liam");
+    assert.equal(JSON.parse(result.stdout).user.username, "liam");
+    assert.equal(JSON.parse(result.stdout).auth_mode, "memhub_oidc");
 
     result = await runCli(["--json", "device", "prepare-android-debug", "--device-id", "1"], {
       env: { SONIC_CLI_CONFIG: configPath },
@@ -1158,7 +1202,9 @@ async function runE2EChecks() {
     });
     assert.equal(result.code, 0, result.stderr);
     assert.equal(JSON.parse(result.stdout).ok, true);
+    assert.equal(JSON.parse(result.stdout).cleared_memhub_testclaw_session, true);
     assert.equal(JSON.parse(fs.readFileSync(authPath, "utf8")).token, undefined);
+    assert.equal(JSON.parse(fs.readFileSync(memhubCredentialsPath, "utf8")).clients?.testclaw, undefined);
 
     result = await runCli(["login", "--username", "admin", "--password", "secret"], {
       env: { SONIC_CLI_CONFIG: configPath },
@@ -1208,6 +1254,11 @@ async function runE2EChecks() {
     assert.equal(result.code, 0, result.stderr);
     assert.equal(JSON.parse(result.stdout).data.risk.score, 90);
   } finally {
+    if (originalMemHubCredentials === undefined) {
+      delete process.env.TESTCLAW_MEMHUB_CREDENTIALS;
+    } else {
+      process.env.TESTCLAW_MEMHUB_CREDENTIALS = originalMemHubCredentials;
+    }
     server.closeAllConnections?.();
     await new Promise((resolve) => server.close(resolve));
     fs.rmSync(tempRoot, { recursive: true, force: true });
