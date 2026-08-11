@@ -309,6 +309,14 @@ async function runE2EChecks() {
         jsonResponse(res, { code: 2000, message: "ok", data: { userName: "liam" } });
         return;
       }
+      if (req.method === "GET" && requestUrl.pathname === "/api/controller/projects/list") {
+        jsonResponse(res, {
+          code: 2000,
+          message: "success",
+          data: [{ id: 9, name: "Demo Project" }],
+        });
+        return;
+      }
       if (req.method === "GET" && requestUrl.pathname === "/api/controller/devices") {
         jsonResponse(res, { code: 2000, message: "ok", data: { id: 1, udId: "device-1", platform: 1, status: "ONLINE", name: "Pixel 4", agentId: 7 } });
         return;
@@ -824,6 +832,7 @@ async function runE2EChecks() {
     const doctorAfterLogin = JSON.parse(result.stdout);
     assert.equal(doctorAfterLogin.auth.has_token, true);
     assert.equal(doctorAfterLogin.checks.find((check) => check.name === "auth.current_user").ok, true);
+    assert.equal(doctorAfterLogin.checks.find((check) => check.name === "auth.permission_probe").ok, true);
 
     result = await runCli(["--json", "whoami"], {
       env: { SONIC_CLI_CONFIG: configPath },
@@ -831,6 +840,12 @@ async function runE2EChecks() {
     assert.equal(result.code, 0, result.stderr);
     assert.equal(JSON.parse(result.stdout).user.username, "liam");
     assert.equal(JSON.parse(result.stdout).auth_mode, "memhub_oidc");
+
+    result = await runCli(["whoami", "--api", baseUrl, "--json"], {
+      env: { SONIC_CLI_CONFIG: configPath },
+    });
+    assert.equal(result.code, 0, result.stderr);
+    assert.equal(JSON.parse(result.stdout).user.username, "liam");
 
     result = await runCli(["--json", "device", "prepare-android-debug", "--device-id", "1"], {
       env: { SONIC_CLI_CONFIG: configPath },
@@ -1464,6 +1479,13 @@ async function runSecurityAnalysisChecks() {
     const jsonVersion = await runCli(["--json", "version"]);
     assert.equal(jsonVersion.code, 0, jsonVersion.stderr);
     assert.equal(JSON.parse(jsonVersion.stdout).name, "testclaw");
+    const jsonVersionAfterCommand = await runCli(["version", "--json"]);
+    assert.equal(jsonVersionAfterCommand.code, 0, jsonVersionAfterCommand.stderr);
+    assert.equal(JSON.parse(jsonVersionAfterCommand.stdout).name, "testclaw");
+    assert.match(help.stdout, /\n  version\n/);
+    const loginHelp = await runCli(["login", "--help"]);
+    assert.equal(loginHelp.code, 0, loginHelp.stderr);
+    assert.doesNotMatch(loginHelp.stdout, /--username|--password/);
     const removedGlobal = await runCli(["--base-url", "http://127.0.0.1:3001", "whoami"]);
     assert.notEqual(removedGlobal.code, 0);
     assert.match(removedGlobal.stderr, /未知全局选项/);
