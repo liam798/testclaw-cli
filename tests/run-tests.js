@@ -101,11 +101,12 @@ async function runCoreChecks() {
     configPath: path.join(memhubRoot, "config.json"),
     memhubCredentialsPath,
   }).config;
-  assert.equal(sharedConfig.token, "shared-testclaw-token");
-  assert.equal(sharedConfig.authMode, "memhub_oidc");
+  assert.equal(sharedConfig.token, null);
+  assert.equal(sharedConfig.authMode, "memhub");
   assert.equal(sharedConfig.tokenSource, "memhub_shared");
+  assert.equal(sharedConfig.sharedMemHubCredential.token, "memhub-token");
   fs.rmSync(memhubRoot, { recursive: true, force: true });
-  logPass("buildConfig reuses shared MemHub TestClaw session");
+  logPass("buildConfig reuses top-level MemHub credential without TestClaw session");
 
   const initRoot = fs.mkdtempSync(path.join(os.tmpdir(), "testclaw-init-"));
   const skillSource = path.join(initRoot, "testclaw-skills");
@@ -799,11 +800,9 @@ async function runE2EChecks() {
     assert.equal(result.code, 0, result.stderr);
     assert.equal(JSON.parse(result.stdout).user.username, "liam");
     assert.equal(JSON.parse(result.stdout).token_source, "memhub_shared");
-    const exchangedMemHub = JSON.parse(fs.readFileSync(memhubCredentialsPath, "utf8"));
-    assert.equal(exchangedMemHub.clients.testclaw.sonic_token, "token-123");
-    delete exchangedMemHub.clients;
-    fs.writeFileSync(memhubCredentialsPath, JSON.stringify(exchangedMemHub), "utf8");
-    logPass("whoami exchanges shared MemHub API key for TestClaw session");
+    const directMemHub = JSON.parse(fs.readFileSync(memhubCredentialsPath, "utf8"));
+    assert.equal(directMemHub.clients?.testclaw, undefined);
+    logPass("whoami uses top-level MemHub credential without writing TestClaw session");
 
     result = await runCli(["--json", "--api", baseUrl, "doctor"], {
       env: { SONIC_CLI_CONFIG: path.join(tempRoot, "api-override-config.json") },
@@ -819,18 +818,18 @@ async function runE2EChecks() {
     assert.ok(Date.now() - loginStartedAt < 4000, "login should exit after successful callback without waiting for timeout");
     const loginPayload = JSON.parse(result.stdout);
     assert.equal(loginPayload.ok, true);
-    assert.equal(loginPayload.auth_mode, "memhub_oidc");
+    assert.equal(loginPayload.auth_mode, "memhub");
     assert.equal(loginPayload.user.username, "liam");
     assert.doesNotMatch(result.stdout, /token-123|oauth-access-1|oauth-refresh-1/);
     const sharedMemHub = JSON.parse(fs.readFileSync(memhubCredentialsPath, "utf8"));
-    assert.equal(sharedMemHub.clients.testclaw.sonic_token, "token-123");
+    assert.equal(sharedMemHub.clients?.testclaw, undefined);
 
     result = await runCli(["--json", "doctor"], {
       env: { SONIC_CLI_CONFIG: configPath },
     });
     assert.equal(result.code, 0, result.stderr);
     const doctorAfterLogin = JSON.parse(result.stdout);
-    assert.equal(doctorAfterLogin.auth.has_token, true);
+    assert.equal(doctorAfterLogin.auth.has_memhub_credential, true);
     assert.equal(doctorAfterLogin.checks.find((check) => check.name === "auth.current_user").ok, true);
     assert.equal(doctorAfterLogin.checks.find((check) => check.name === "auth.permission_probe").ok, true);
 
@@ -839,7 +838,7 @@ async function runE2EChecks() {
     });
     assert.equal(result.code, 0, result.stderr);
     assert.equal(JSON.parse(result.stdout).user.username, "liam");
-    assert.equal(JSON.parse(result.stdout).auth_mode, "memhub_oidc");
+    assert.equal(JSON.parse(result.stdout).auth_mode, "memhub");
 
     result = await runCli(["whoami", "--api", baseUrl, "--json"], {
       env: { SONIC_CLI_CONFIG: configPath },
@@ -1252,7 +1251,7 @@ async function runE2EChecks() {
     });
     assert.equal(result.code, 0, result.stderr);
     assert.equal(JSON.parse(result.stdout).ok, true);
-    assert.equal(JSON.parse(result.stdout).cleared_memhub_testclaw_session, true);
+    assert.equal(JSON.parse(result.stdout).cleared_legacy_memhub_testclaw_session, false);
     assert.equal(JSON.parse(fs.readFileSync(authPath, "utf8")).token, undefined);
     assert.equal(JSON.parse(fs.readFileSync(memhubCredentialsPath, "utf8")).clients?.testclaw, undefined);
 

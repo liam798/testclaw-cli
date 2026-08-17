@@ -154,13 +154,13 @@ testclaw --api https://testclaw.vvicat.dev --json whoami
 ~/.config/testclaw/config.json
 ```
 
-TestClaw CLI 使用 MemHub 统一身份登录。新登录会优先把 TestClaw CLI 会话写入共享 MemHub credential：
+TestClaw CLI 使用 MemHub 统一身份登录。默认复用共享 MemHub 顶层登录态：
 
 ```text
 ~/.memhub/credentials.json
 ```
 
-写入位置为 `clients.testclaw`，用于复用同一个 MemHub 身份；不会在命令输出中打印 `SonicToken`、OAuth access token 或 refresh token。
+CLI 不会把 TestClaw 业务 token 或服务级 session 写入 `clients.testclaw`。业务请求会直接携带顶层 `api_key` 或 `access_token`，由 TestClaw 后端实时校验 MemHub 身份并注入业务上下文；命令输出不会打印任何 token。
 
 为兼容旧版本，CLI 仍会读取并维护旧认证文件：
 
@@ -201,7 +201,7 @@ testclaw login
 
 `testclaw login` 默认打开 TestClaw OAuth 授权页，并通过后端配置的 MemHub 登录入口完成统一身份认证。登录成功后会立即调用 `whoami` 验证，验证失败不会保存为有效登录。
 
-退出登录会清理 `auth.json` 和共享 MemHub credential 中的 `clients.testclaw`，不会删除 MemHub 顶层登录态，也不会改动 `config.json`：
+退出登录只清理 `auth.json` 中的旧版兼容凭据，并会顺手删除历史版本遗留的 `clients.testclaw`；不会删除 MemHub 顶层登录态，也不会改动 `config.json`：
 
 ```bash
 testclaw logout
