@@ -37,6 +37,16 @@ function logPass(name) {
   process.stdout.write(`✔ ${name}\n`);
 }
 
+function createJwt(payload) {
+  const encode = (value) =>
+    Buffer.from(JSON.stringify(value), "utf8")
+      .toString("base64")
+      .replace(/\+/g, "-")
+      .replace(/\//g, "_")
+      .replace(/=+$/g, "");
+  return `${encode({ alg: "HS256", typ: "JWT" })}.${encode(payload)}.signature`;
+}
+
 async function runCoreChecks() {
   assert.equal(normalizeAdbAddress("adb connect 127.0.0.1:5555"), "127.0.0.1:5555");
   assert.equal(normalizeAdbAddress("http://127.0.0.1:5555/path"), "127.0.0.1:5555");
@@ -311,6 +321,14 @@ async function runE2EChecks() {
   let securityTasks = [];
   let securityReports = new Map();
   let agentCommandCalls = [];
+  const serverState = {
+    userResponse: { code: 2000, message: "ok", data: { userName: "liam" } },
+    projectsResponse: {
+      code: 2000,
+      message: "success",
+      data: [{ id: 9, name: "Demo Project" }],
+    },
+  };
   let securityTaskId = 600;
   let moduleId = 100;
   let caseId = 200;
@@ -336,15 +354,11 @@ async function runE2EChecks() {
         return;
       }
       if (req.method === "GET" && requestUrl.pathname === "/api/controller/users") {
-        jsonResponse(res, { code: 2000, message: "ok", data: { userName: "liam" } });
+        jsonResponse(res, serverState.userResponse);
         return;
       }
       if (req.method === "GET" && requestUrl.pathname === "/api/controller/projects/list") {
-        jsonResponse(res, {
-          code: 2000,
-          message: "success",
-          data: [{ id: 9, name: "Demo Project" }],
-        });
+        jsonResponse(res, serverState.projectsResponse);
         return;
       }
       if (req.method === "GET" && requestUrl.pathname === "/api/controller/devices") {
@@ -832,6 +846,47 @@ async function runE2EChecks() {
     const directMemHub = JSON.parse(fs.readFileSync(memhubCredentialsPath, "utf8"));
     assert.equal(directMemHub.clients?.testclaw, undefined);
     logPass("whoami uses top-level MemHub credential without writing TestClaw session");
+
+    fs.writeFileSync(memhubCredentialsPath, JSON.stringify({
+      base_url: "https://memhub.vvicat.dev",
+      auth_mode: "api_key",
+      api_key: "memhub-api-key-2",
+      access_token: createJwt({ sub: "liam", code: "liam", memhubSub: "37" }),
+    }), "utf8");
+    serverState.userResponse = { code: 1001, message: "Authentication Exception!" };
+    serverState.projectsResponse = { code: 1001, message: "Authentication Exception!" };
+    result = await runCli(["--json", "whoami"], {
+      env: { SONIC_CLI_CONFIG: configPath },
+    });
+    assert.equal(result.code, 0, result.stderr);
+    const fallbackWhoami = JSON.parse(result.stdout);
+    assert.equal(fallbackWhoami.user.username, "liam");
+    assert.equal(fallbackWhoami.user.id, "37");
+    assert.equal(fallbackWhoami.fallback, "shared_memhub_user");
+    assert.match(fallbackWhoami.warning, /Authentication Exception/);
+
+    result = await runCli(["--json", "doctor"], {
+      env: { SONIC_CLI_CONFIG: configPath },
+    });
+    assert.equal(result.code, 0, result.stderr);
+    const fallbackDoctor = JSON.parse(result.stdout);
+    assert.equal(fallbackDoctor.checks.find((check) => check.name === "auth.current_user").ok, true);
+    assert.equal(
+      fallbackDoctor.checks.find((check) => check.name === "auth.current_user").fallback,
+      "shared_memhub_user",
+    );
+    assert.equal(fallbackDoctor.checks.find((check) => check.name === "auth.permission_probe").ok, false);
+    assert.match(
+      fallbackDoctor.checks.find((check) => check.name === "auth.permission_probe").error,
+      /Authentication Exception/,
+    );
+    serverState.userResponse = { code: 2000, message: "ok", data: { userName: "liam" } };
+    serverState.projectsResponse = {
+      code: 2000,
+      message: "success",
+      data: [{ id: 9, name: "Demo Project" }],
+    };
+    logPass("whoami falls back to shared MemHub identity when Sonic user lookup is unavailable");
 
     result = await runCli(["--json", "--api", baseUrl, "doctor"], {
       env: { SONIC_CLI_CONFIG: path.join(tempRoot, "api-override-config.json") },
