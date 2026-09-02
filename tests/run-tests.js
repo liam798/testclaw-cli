@@ -842,7 +842,6 @@ async function runE2EChecks() {
     });
     assert.equal(result.code, 0, result.stderr);
     assert.equal(JSON.parse(result.stdout).user.username, "liam");
-    assert.equal(JSON.parse(result.stdout).token_source, "memhub_shared");
     const directMemHub = JSON.parse(fs.readFileSync(memhubCredentialsPath, "utf8"));
     assert.equal(directMemHub.clients?.testclaw, undefined);
     logPass("whoami uses top-level MemHub credential without writing TestClaw session");
@@ -862,8 +861,8 @@ async function runE2EChecks() {
     const fallbackWhoami = JSON.parse(result.stdout);
     assert.equal(fallbackWhoami.user.username, "liam");
     assert.equal(fallbackWhoami.user.id, "37");
-    assert.equal(fallbackWhoami.fallback, "shared_memhub_user");
-    assert.match(fallbackWhoami.warning, /Authentication Exception/);
+    assert.equal(fallbackWhoami.auth_mode, "memhub");
+    assert.deepEqual(Object.keys(fallbackWhoami).sort(), ["admin", "auth_mode", "base_url", "roles", "user"]);
 
     result = await runCli(["--json", "doctor"], {
       env: { SONIC_CLI_CONFIG: configPath },
