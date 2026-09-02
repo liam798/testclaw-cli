@@ -138,6 +138,35 @@ async function runCoreChecks() {
   assert.equal(updatePayload.currentVersion, updatePayload.latestVersion);
   logPass("update --check reports installable version");
 
+  const bootstrapRoot = fs.mkdtempSync(path.join(os.tmpdir(), "testclaw-bootstrap-"));
+  const bootstrapSkillSource = path.join(bootstrapRoot, "testclaw-skills");
+  const bootstrapConfigPath = path.join(bootstrapRoot, "config.json");
+  fs.mkdirSync(path.join(bootstrapSkillSource, "testclaw-cli", "references"), { recursive: true });
+  fs.writeFileSync(path.join(bootstrapSkillSource, "testclaw-cli", "SKILL.md"), "# TestClaw CLI Skill\n", "utf8");
+  fs.writeFileSync(path.join(bootstrapSkillSource, "testclaw-cli", "references", "tools.md"), "tools\n", "utf8");
+  fs.mkdirSync(path.join(bootstrapRoot, ".codex"), { recursive: true });
+  const bootstrapResult = await runCli([
+    "--json",
+    "bootstrap",
+    "--skip-update",
+    "--source-dir",
+    bootstrapSkillSource,
+    "--base-url",
+    "https://testclaw.vvicat.dev/",
+  ], {
+    env: { HOME: bootstrapRoot, USERPROFILE: bootstrapRoot, SONIC_CLI_CONFIG: bootstrapConfigPath },
+  });
+  assert.equal(bootstrapResult.code, 0, bootstrapResult.stderr);
+  const bootstrapPayload = JSON.parse(bootstrapResult.stdout);
+  assert.equal(bootstrapPayload.ok, true);
+  assert.equal(bootstrapPayload.config.base_url, "https://testclaw.vvicat.dev");
+  assert.equal(bootstrapPayload.skillInit.ok, true);
+  assert.ok(fs.existsSync(path.join(bootstrapRoot, ".codex", "skills", "testclaw-cli", "SKILL.md")));
+  const bootstrapConfig = JSON.parse(fs.readFileSync(bootstrapConfigPath, "utf8"));
+  assert.equal(bootstrapConfig.base_url, "https://testclaw.vvicat.dev");
+  fs.rmSync(bootstrapRoot, { recursive: true, force: true });
+  logPass("bootstrap saves base_url and syncs skill");
+
   class FakeBackend {
     async releaseDevice({ udid }) {
       return { released: true, udId: udid };

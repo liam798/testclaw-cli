@@ -55,15 +55,26 @@ testclaw --help
 testclaw --json doctor
 ```
 
-配置 TestClaw Server 并登录：
+推荐直接执行自举：
 
 ```bash
-testclaw config set base_url https://testclaw.vvicat.dev
+testclaw bootstrap --base-url https://testclaw.vvicat.dev
+```
+
+这一步会：
+
+- 检查 `testclaw-cli` 是否有可安装更新
+- 同步 `testclaw-cli` skill 到本机已检测到的 agent skills 目录
+- 把 `base_url` 写成正式环境 `https://testclaw.vvicat.dev`
+
+然后再登录：
+
+```bash
 testclaw login
 testclaw --json whoami
 ```
 
-初始化 AI Agent skills：
+如需只同步 AI Agent skills，也可以单独执行：
 
 ```bash
 testclaw init
@@ -113,6 +124,12 @@ npm install -g git+https://github.com/liam798/testclaw-cli.git
 
 更新完成后，重新执行 `testclaw` 命令即可使用新版本。
 
+也可以用统一自举命令在进入业务前自动处理：
+
+```bash
+testclaw bootstrap --base-url https://testclaw.vvicat.dev
+```
+
 开发者本地仓库安装：
 
 ```bash
@@ -127,6 +144,12 @@ npm install -g .
 
 ```bash
 testclaw --help
+```
+
+推荐给 agent skill 调用的自举入口：
+
+```bash
+testclaw bootstrap --base-url https://testclaw.vvicat.dev
 ```
 
 诊断当前安装、配置、认证和服务连通性：
@@ -216,8 +239,7 @@ https://testclaw.vvicat.dev/api/oauth
 ## 常用示例
 
 ```bash
-  testclaw config set base_url https://testclaw.vvicat.dev
-  testclaw init
+  testclaw bootstrap --base-url https://testclaw.vvicat.dev
   testclaw update --check
   testclaw --json doctor
   testclaw login
