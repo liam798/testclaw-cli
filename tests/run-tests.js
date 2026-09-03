@@ -185,6 +185,8 @@ async function runCoreChecks() {
     async prepareAndroidDebug({ deviceId, udid }) {
       return {
         adbAddress: "127.0.0.1:56001",
+        adbConnectCommand: "adb connect 127.0.0.1:56001",
+        connectionType: "relay",
         resolvedDevice: { id: deviceId || 1, udId: udid || "device-1" },
       };
     }
@@ -201,7 +203,12 @@ async function runCoreChecks() {
   const app = { backend: new FakeBackend() };
   session.rememberPrepare(
     { deviceId: 1, udId: "device-1" },
-    { adbAddress: "127.0.0.1:56001", resolvedDevice: { id: 1, udId: "device-1" } },
+    {
+      adbAddress: "127.0.0.1:56001",
+      adbConnectCommand: "adb connect 127.0.0.1:56001",
+      connectionType: "relay",
+      resolvedDevice: { id: 1, udId: "device-1" },
+    },
   );
   assert.equal((await session.undo(app)).ok, true);
   assert.equal((await session.redo(app)).ok, true);
@@ -377,7 +384,27 @@ async function runE2EChecks() {
         jsonResponse(res, {
           code: 2000,
           message: "ok",
-          data: { sas: "adb connect 127.0.0.1:56001", uia2: "http://127.0.0.1:57001/wd/hub" },
+          data: {
+            sas: "adb connect testclaw.vvicat.dev:15101",
+            uia2: "http://127.0.0.1:57001/wd/hub",
+            legacy: { sas: "adb connect 127.0.0.1:56001" },
+            selected: {
+              sas: {
+                type: "relay",
+                url: "testclaw.vvicat.dev:15101",
+                available: true,
+                expiresAt: "2026-09-03T10:30:00Z",
+              },
+            },
+            candidates: {
+              sas: [
+                { type: "mesh", url: "100.64.1.7:56001", available: true, priority: 20 },
+                { type: "relay", url: "testclaw.vvicat.dev:15101", available: true, priority: 80, expiresAt: "2026-09-03T10:30:00Z" },
+                { type: "direct", url: "127.0.0.1:56001", available: true, priority: 60 },
+              ],
+            },
+            expiresAt: "2026-09-03T10:30:00Z",
+          },
         });
         return;
       }
@@ -933,7 +960,9 @@ async function runE2EChecks() {
       env: { SONIC_CLI_CONFIG: configPath },
     });
     assert.equal(result.code, 0, result.stderr);
-    assert.equal(JSON.parse(result.stdout).adbAddress, "127.0.0.1:56001");
+    assert.equal(JSON.parse(result.stdout).adbAddress, "testclaw.vvicat.dev:15101");
+    assert.equal(JSON.parse(result.stdout).adbConnectCommand, "adb connect testclaw.vvicat.dev:15101");
+    assert.equal(JSON.parse(result.stdout).connectionType, "relay");
 
     result = await runCli(["--json", "app", "list-installed", "--device-id", "1"], {
       env: { SONIC_CLI_CONFIG: configPath },
